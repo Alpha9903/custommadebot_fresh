@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Jain Estates Chatbot Dashboard</title>
+    <link rel="stylesheet" href="dashboard.css">
+</head>
+<body>
+    <div class="dashboard-container">
+        <div class="sidebar">
+            <h2>Jain Estates</h2>
+            <nav>
+                <a href="#branding" class="active">Branding</a>
+                <a href="#knowledge-base">Knowledge Base</a>
+                <a href="#features">Features</a>
+                <a href="#analytics">Analytics</a>
+                <a href="#subscription">Subscription</a>
+            </nav>
+        </div>
+        <div class="main-content">
+            <header>
+                <h1>Dashboard</h1>
+                <button id="logoutButton">Logout</button>
+            </header>
+            <section id="branding">
+                <h2>Branding Customization</h2>
+                <form id="brandingForm">
+                    <label>Logo URL:</label>
+                    <input type="text" id="logoUrl" placeholder="https://example.com/logo.png">
+                    <label>Primary Color:</label>
+                    <input type="color" id="primaryColor" value="#ff6200">
+                    <label>Welcome Message:</label>
+                    <input type="text" id="welcomeMessage" placeholder="Welcome to Jain Estates!">
+                    <button type="submit">Save</button>
+                </form>
+            </section>
+            <section id="knowledge-base">
+                <h2>Knowledge Base</h2>
+                <form id="knowledgeBaseForm">
+                    <label>Source:</label>
+                    <input type="text" id="kbSource" placeholder="e.g., FAQ">
+                    <label>Content:</label>
+                    <textarea id="kbContent" placeholder="Enter response content"></textarea>
+                    <button type="submit">Add</button>
+                </form>
+                <table id="kbTable">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Source</th>
+                            <th>Content</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </section>
+            <section id="features">
+                <h2>Feature Toggling</h2>
+                <form id="featuresForm">
+                    <label><input type="checkbox" id="locationTracking" name="locationTracking"> Location Tracking</label>
+                    <label><input type="checkbox" id="appointmentBooking" name="appointmentBooking"> Appointment Booking</label>
+                    <label><input type="checkbox" id="ticketRaising" name="ticketRaising"> Ticket Raising</label>
+                    <button type="submit">Save</button>
+                </form>
+            </section>
+            <section id="analytics">
+                <h2>Analytics</h2>
+                <div id="analyticsContent">
+                    <p>Total Users: <span id="totalUsers">0</span></p>
+                    <h3>Common Questions</h3>
+                    <ul id="commonQuestions"></ul>
+                </div>
+            </section>
+            <section id="subscription">
+                <h2>Subscription</h2>
+                <p>Current Plan: <span id="currentPlan">Loading...</span></p>
+                <button id="upgradeButton">Upgrade to Premium ($50/month)</button>
+            </section>
+        </div>
+    </div>
+    <script src="dashboard.js"></script>
+</body>
+</html>
