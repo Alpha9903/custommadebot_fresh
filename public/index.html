@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Jain Estates Chatbot</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="chat-container">
+        <div class="chat-header">
+            <img id="companyLogo" src="https://via.placeholder.com/40" alt="Logo" class="logo">
+            <h2>Jain Estates</h2>
+            <p>have it your way</p>
+            <button class="refresh-btn" id="refreshButton">↻</button>
+            <button class="close-btn" id="closeButton">×</button>
+        </div>
+        <div class="chat-messages" id="chatMessages">
+            <!-- Welcome message will be added dynamically via script.js -->
+        </div>
+        <div class="chat-input">
+            <button class="mic-btn" id="micButton">🎤</button>
+            <button class="location-btn" id="locationButton">📍</button>
+            <input type="text" id="chatInput" placeholder="Message...">
+            <button class="send-btn" id="sendButton">↑</button>
+        </div>
+        <div class="powered-by">
+            Powered by <a href="#" target="_blank">ANHANCE</a>
+        </div>
+    </div>
+    <script src="script.js"></script>
+</body>
+</html>
