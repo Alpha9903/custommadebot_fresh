@@ -4,7 +4,7 @@ const { readFile, writeFile } = require("fs").promises;
 const axios = require("axios");
 const path = require("path");
 const Redis = require("ioredis");
-// const Redis = new Redis(process.env.REDIS_URL || "redis://127.0.0.1:6379");
+const redisclient = new Redis(process.env.REDIS_URL || "redis://127.0.0.1:6379");
 const mysql = require("mysql2/promise");
 const cors = require("cors");
 const WebSocket = require("ws");
@@ -79,11 +79,11 @@ const authenticateJWT = (req, res, next) => {
     });
 };
 
-redis.on("connect", () => {
+redisclient.on("connect", () => {
     console.log("✅ Connected to Redis successfully!");
 });
 
-redis.on("error", (err) => {
+redisclient.on("error", (err) => {
     console.error("❌ Redis Error:", err);
 });
 
