@@ -34,15 +34,20 @@ if (!process.env.GOOGLE_API_KEY || !process.env.STRIPE_SECRET_KEY || !process.en
 }
 
 // 🔥 Upstash Redis Connection
-const redisclient = new Redis(process.env.UPSTASH_REDIS_URL);
-
-redisclient.on("connect", () => {
-    console.log("✅ Connected to Upstash Redis successfully!");
-});
-
-redisclient.on("error", (err) => {
-    console.error("❌ Redis Connection Error:", err);
-});
+const redis = new Redis(process.env.REDIS_URL, {
+    retryStrategy(times) {
+      const delay = Math.min(times * 50, 2000); // Increases retry delay up to 2s
+      return delay;
+    },
+    maxRetriesPerRequest: null, // Prevents request retry limit error
+    reconnectOnError(err) {
+      console.error("🔄 Reconnecting to Redis due to error:", err.message);
+      return true; // Forces reconnection
+    },
+  });
+  
+  redis.on("connect", () => console.log("✅ Connected to Upstash Redis successfully!"));
+  redis.on("error", (err) => console.error("❌ Redis Connection Error:", err));
 
 // Example: Redis Set & Get
 (async () => {
