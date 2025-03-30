@@ -34,16 +34,8 @@ if (!process.env.GOOGLE_API_KEY || !process.env.STRIPE_SECRET_KEY || !process.en
 }
 
 // 🔥 Upstash Redis Connection
-const redis = new Redis(process.env.REDIS_URL, {
-    retryStrategy(times) {
-      const delay = Math.min(times * 50, 2000); // Increases retry delay up to 2s
-      return delay;
-    },
-    maxRetriesPerRequest: null, // Prevents request retry limit error
-    reconnectOnError(err) {
-      console.error("🔄 Reconnecting to Redis due to error:", err.message);
-      return true; // Forces reconnection
-    },
+const redis = new Redis(process.env.REDIS_URL || "redis://default:YOUR_UPSTASH_REDIS_URL:6379", {
+    tls: { rejectUnauthorized: false }, // Ensures Upstash connection works
   });
   
   redis.on("connect", () => console.log("✅ Connected to Upstash Redis successfully!"));
