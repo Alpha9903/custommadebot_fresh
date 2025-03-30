@@ -4,7 +4,6 @@ const { readFile, writeFile } = require("fs").promises;
 const axios = require("axios");
 const path = require("path");
 const Redis = require("ioredis");
-const redisclient = new Redis("redis://127.0.0.1:6379"); // Directly hardcoding the Redis URL
 const mysql = require("mysql2/promise");
 const cors = require("cors");
 const WebSocket = require("ws");
@@ -29,11 +28,34 @@ const JWT_SECRET = process.env.JWT_SECRET || "your_jwt_secret";
 const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY);
 const geminiModel = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
 
-if (!process.env.GOOGLE_API_KEY || !process.env.STRIPE_SECRET_KEY) {
-    console.error("ERROR: Missing GOOGLE_API_KEY or STRIPE_SECRET_KEY in key.env");
+if (!process.env.GOOGLE_API_KEY || !process.env.STRIPE_SECRET_KEY || !process.env.UPSTASH_REDIS_URL) {
+    console.error("ERROR: Missing environment variables (GOOGLE_API_KEY, STRIPE_SECRET_KEY, UPSTASH_REDIS_URL) in key.env");
     process.exit(1);
 }
 
+// 🔥 Upstash Redis Connection
+const redisclient = new Redis(process.env.UPSTASH_REDIS_URL);
+
+redisclient.on("connect", () => {
+    console.log("✅ Connected to Upstash Redis successfully!");
+});
+
+redisclient.on("error", (err) => {
+    console.error("❌ Redis Connection Error:", err);
+});
+
+// Example: Redis Set & Get
+(async () => {
+    try {
+        await redisclient.set("status", "Bot is Live!");
+        const value = await redisclient.get("status");
+        console.log("🚀 Redis Test Value:", value);
+    } catch (error) {
+        console.error("❌ Redis Operation Failed:", error);
+    }
+})();
+
+// MySQL Database Connection
 const DB_CONFIG = {
     host: "localhost",
     user: "root",
@@ -45,7 +67,7 @@ const DB_CONFIG = {
 };
 
 const db = mysql.createPool(DB_CONFIG);
-console.log("Connected to MySQL database!");
+console.log("✅ Connected to MySQL database!");
 
 // Rate limiter for Gemini API requests
 const geminiRateLimiter = rateLimit({
@@ -55,16 +77,18 @@ const geminiRateLimiter = rateLimit({
 });
 
 app.use(express.static("public"));
-app.use(express.json({ limit: '10mb' }));
+app.use(express.json({ limit: "10mb" }));
 app.use(cors());
 
 // Session middleware
-app.use(session({
-    secret: process.env.SESSION_SECRET || "your_session_secret",
-    resave: false,
-    saveUninitialized: false,
-    cookie: { secure: false } // Set to true if using HTTPS
-}));
+app.use(
+    session({
+        secret: process.env.SESSION_SECRET || "your_session_secret",
+        resave: false,
+        saveUninitialized: false,
+        cookie: { secure: false }, // Set to true if using HTTPS
+    })
+);
 
 // Middleware to verify JWT
 const authenticateJWT = (req, res, next) => {
@@ -78,14 +102,7 @@ const authenticateJWT = (req, res, next) => {
     });
 };
 
-redisclient.on("connect", () => {
-    console.log("✅ Connected to Redis successfully!");
-});
-
-redisclient.on("error", (err) => {
-    console.error("❌ Redis Error:", err);
-});
-
+// Routes
 app.get("/", (req, res) => {
     res.sendFile(path.join(__dirname, "public", "login.html"));
 });
@@ -102,7 +119,7 @@ app.get("/dashboard", (req, res) => {
     res.sendFile(path.join(__dirname, "public", "dashboard.html"));
 });
 
-// Signup Endpoint
+// Signup Endpoint (Fixed)
 app.post("/signup", async (req, res) => {
     const { username, password } = req.body;
 
@@ -114,28 +131,29 @@ app.post("/signup", async (req, res) => {
         const saltRounds = 10;
         const hashedPassword = await bcrypt.hash(password, saltRounds);
 
-        const query = "INSERT INTO users (username, password) VALUES (?, ?)";
-        await db.execute(query, [username, hashedPassword]);
+        // Insert user into database
+        await db.execute("INSERT INTO users (username, password) VALUES (?, ?)", [username, hashedPassword]);
 
         // Initialize company settings and subscription
-        await db.execute(
-            "INSERT INTO company_settings (company_id) VALUES (?)",
-            [username]
-        );
-        await db.execute(
-            "INSERT INTO subscriptions (company_id, plan) VALUES (?, 'freemium')",
-            [username]
-        );
+        await db.execute("INSERT INTO company_settings (company_id) VALUES (?)", [username]);
+        await db.execute("INSERT INTO subscriptions (company_id, plan) VALUES (?, 'freemium')", [username]);
 
-        res.status(201).json({ message: "User created successfully" });
-    } catch (err) {
-        if (err.code === "ER_DUP_ENTRY") {
+        res.status(201).json({ message: "User created successfully!" });
+
+    } catch (error) {
+        if (error.code === "ER_DUP_ENTRY") {
             return res.status(400).json({ message: "Username already exists" });
         }
-        console.error("Error creating user:", err);
-        res.status(500).json({ message: "Error creating user" });
+        console.error("❌ Error creating user:", error);
+        res.status(500).json({ message: "Internal server error" });
     }
 });
+
+// Start Server
+server.listen(PORT, () => {
+    console.log(`🚀 Server running on http://localhost:${PORT}`);
+});
+
 
 // Login Endpoint
 app.post("/login", async (req, res) => {
