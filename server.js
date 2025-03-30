@@ -4,7 +4,7 @@ const { readFile, writeFile } = require("fs").promises;
 const axios = require("axios");
 const path = require("path");
 const Redis = require("ioredis");
-const redisclient = new Redis(process.env.REDIS_URL || "redis://127.0.0.1:6379");
+const redisclient = new Redis("redis://127.0.0.1:6379"); // Directly hardcoding the Redis URL
 const mysql = require("mysql2/promise");
 const cors = require("cors");
 const WebSocket = require("ws");
@@ -20,7 +20,6 @@ const server = require("http").createServer(app);
 const wss = new WebSocket.Server({ server });
 const PORT = process.env.PORT || 3000;
 const questionsFile = path.join(__dirname, "public", "questions.json");
-const redis = new Redis();
 const SCRAPE_URL = "https://floralwhite-wallaby-276579.hostingersite.com/";
 const COMPANY_NAME = "Jain Estates"; // Updated to Jain Estates
 
@@ -592,7 +591,7 @@ async function isContactInfoMissing(user_id) {
 
 async function getUserState(user_id) {
     try {
-        const stateData = await redis.get(`user_state:${user_id}`);
+        const stateData = await redisclient.get(`user_state:${user_id}`);
         return stateData ? JSON.parse(stateData) : { state: "initial", data: {} };
     } catch (err) {
         console.error("Error getting user state from Redis:", err);
@@ -602,7 +601,7 @@ async function getUserState(user_id) {
 
 async function setUserState(user_id, stateData) {
     try {
-        await redis.set(`user_state:${user_id}`, JSON.stringify(stateData), "EX", 24 * 60 * 60);
+        await redisclient.set(`user_state:${user_id}`, JSON.stringify(stateData), "EX", 24 * 60 * 60);
     } catch (err) {
         console.error("Error setting user state in Redis:", err);
     }
@@ -664,7 +663,7 @@ async function handleNormalConversation(user_id, question, userStateData) {
     try {
         console.log(`Handling normal conversation for user ${user_id}, question: ${question}`);
         const normalizedQuestion = question.trim().toLowerCase();
-        const cachedResponse = await redis.get(`question:${normalizedQuestion}`);
+        const cachedResponse = await redisclient.get(`question:${normalizedQuestion}`);
         if (cachedResponse) {
             console.log("Returning cached response");
             return { answer: formatResponse(cachedResponse) };
@@ -690,7 +689,7 @@ async function handleNormalConversation(user_id, question, userStateData) {
 
         const finalAnswer = fixCommonTypos(rawAnswer);
         const formattedAnswer = formatResponse(finalAnswer);
-        await redis.set(`question:${normalizedQuestion}`, formattedAnswer, "EX", 3600);
+        await redisclient.set(`question:${normalizedQuestion}`, formattedAnswer, "EX", 3600);
         await saveChatToDB(user_id, question, formattedAnswer);
         return { answer: formattedAnswer };
     } catch (err) {
@@ -943,8 +942,8 @@ app.post("/api/create-checkout-session", authenticateJWT, async (req, res) => {
                 },
             ],
             mode: "subscription",
-            success_url: `http://localhost:${PORT}/dashboard?success=true`,
-            cancel_url: `http://localhost:${PORT}/dashboard?canceled=true`,
+            success_url: `https://custommadebot-fresh.onrender.com/dashboard?success=true`,
+            cancel_url: `https://custommadebot-fresh.onrender.com/dashboard?canceled=true`,
         });
 
         res.json({ url: session.url });
@@ -1295,7 +1294,7 @@ app.post("/ask", geminiRateLimiter, async (req, res) => {
 
 let scrapedContent = "";
 server.listen(PORT, async () => {
-    console.log(`Server running on http://localhost:${PORT}`);
+    console.log(`Server running on https://custommadebot-fresh.onrender.com`);
     const scrapeResult = await scrapeWebsite(SCRAPE_URL);
     if (typeof scrapeResult === "string" && !scrapeResult.startsWith("Error")) {
         scrapedContent = scrapeResult;
