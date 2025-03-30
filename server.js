@@ -149,10 +149,10 @@ app.post("/signup", async (req, res) => {
     }
 });
 
-// Start Server
-server.listen(PORT, () => {
-    console.log(`🚀 Server running on http://localhost:${PORT}`);
+server.listen(PORT, "0.0.0.0", () => {
+    console.log(`🚀 Server running on https://custommadebot-fresh.onrender.com`);
 });
+
 
 
 // Login Endpoint
