@@ -4,6 +4,7 @@ const { readFile, writeFile } = require("fs").promises;
 const axios = require("axios");
 const path = require("path");
 const Redis = require("ioredis");
+const redis = new Redis("rediss://default:AcIuAAIjcDEyY2E3NmMzNTVkMjM0YjNlOWNmN2UyMDU5ZDE4MDU3MnAxMA@refined-meerkat-49710.upstash.io:6379");
 const mysql = require("mysql2/promise");
 const cors = require("cors");
 const WebSocket = require("ws");
@@ -34,12 +35,22 @@ if (!process.env.GOOGLE_API_KEY || !process.env.STRIPE_SECRET_KEY || !process.en
 }
 
 // 🔥 Upstash Redis Connection
-const redis = new Redis(process.env.REDIS_URL || "redis://default:YOUR_UPSTASH_REDIS_URL:6379", {
-    tls: { rejectUnauthorized: false }, // Ensures Upstash connection works
-  });
-  
-  redis.on("connect", () => console.log("✅ Connected to Upstash Redis successfully!"));
-  redis.on("error", (err) => console.error("❌ Redis Connection Error:", err));
+// const redis = require("redis");
+
+const redisClient = redis.createClient({
+    url: process.env.REDIS_URL, // Make sure this is correct
+    socket: {
+        tls: true, // Enable TLS if needed
+    },
+});
+
+redisClient.on("error", (err) => {
+    console.error("❌ Redis Connection Error:", err);
+});
+
+redisClient.connect()
+    .then(() => console.log("✅ Redis Connected!"))
+    .catch((err) => console.error("❌ Redis Connection Failed:", err));
 
 // Example: Redis Set & Get
 (async () => {
