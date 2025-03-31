@@ -34,14 +34,16 @@ if (!process.env.GOOGLE_API_KEY || !process.env.STRIPE_SECRET_KEY) {
 
 // MySQL Database Connection
 const DB_CONFIG = {
-    host: "custommadebot-fresh.onrender.com",
+    host: "custommadebot-fresh.onrender.com",  // ✅ Render MySQL Host
     user: "root",
     password: "12345",
     database: "bot_database",
     waitForConnections: true,
     connectionLimit: 10,
     queueLimit: 0,
+    connectTimeout: 20000,  // ✅ 20 seconds timeout
 };
+
 
 const db = mysql.createPool(DB_CONFIG);
 console.log("✅ Connected to MySQL database!");
