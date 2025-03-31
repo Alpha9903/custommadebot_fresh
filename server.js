@@ -3,8 +3,6 @@ const express = require("express");
 const { readFile, writeFile } = require("fs").promises;
 const axios = require("axios");
 const path = require("path");
-const Redis = require("ioredis");
-const redis = new Redis("rediss://default:AcIuAAIjcDEyY2E3NmMzNTVkMjM0YjNlOWNmN2UyMDU5ZDE4MDU3MnAxMA@refined-meerkat-49710.upstash.io:6379");
 const mysql = require("mysql2/promise");
 const cors = require("cors");
 const WebSocket = require("ws");
@@ -20,8 +18,8 @@ const server = require("http").createServer(app);
 const wss = new WebSocket.Server({ server });
 const PORT = process.env.PORT || 3000;
 const questionsFile = path.join(__dirname, "public", "questions.json");
-const SCRAPE_URL = "https://floralwhite-wallaby-276579.hostingersite.com/";
-const COMPANY_NAME = "Jain Estates"; // Updated to Jain Estates
+const SCRAPE_URL = "https://www.voiceflow.com/";
+const COMPANY_NAME = "Jain Estates";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 const JWT_SECRET = process.env.JWT_SECRET || "your_jwt_secret";
@@ -29,39 +27,10 @@ const JWT_SECRET = process.env.JWT_SECRET || "your_jwt_secret";
 const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY);
 const geminiModel = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
 
-if (!process.env.GOOGLE_API_KEY || !process.env.STRIPE_SECRET_KEY || !process.env.UPSTASH_REDIS_URL) {
-    console.error("ERROR: Missing environment variables (GOOGLE_API_KEY, STRIPE_SECRET_KEY, UPSTASH_REDIS_URL) in key.env");
+if (!process.env.GOOGLE_API_KEY || !process.env.STRIPE_SECRET_KEY) {
+    console.error("ERROR: Missing environment variables (GOOGLE_API_KEY, STRIPE_SECRET_KEY) in key.env");
     process.exit(1);
 }
-
-// 🔥 Upstash Redis Connection
-// const redis = require("redis");
-
-const redisClient = redis.createClient({
-    url: process.env.REDIS_URL, // Make sure this is correct
-    socket: {
-        tls: true, // Enable TLS if needed
-    },
-});
-
-redisClient.on("error", (err) => {
-    console.error("❌ Redis Connection Error:", err);
-});
-
-redisClient.connect()
-    .then(() => console.log("✅ Redis Connected!"))
-    .catch((err) => console.error("❌ Redis Connection Failed:", err));
-
-// Example: Redis Set & Get
-(async () => {
-    try {
-        await redisclient.set("status", "Bot is Live!");
-        const value = await redisclient.get("status");
-        console.log("🚀 Redis Test Value:", value);
-    } catch (error) {
-        console.error("❌ Redis Operation Failed:", error);
-    }
-})();
 
 // MySQL Database Connection
 const DB_CONFIG = {
@@ -127,7 +96,7 @@ app.get("/dashboard", (req, res) => {
     res.sendFile(path.join(__dirname, "public", "dashboard.html"));
 });
 
-// Signup Endpoint (Fixed)
+// Signup Endpoint
 app.post("/signup", async (req, res) => {
     const { username, password } = req.body;
 
@@ -139,15 +108,11 @@ app.post("/signup", async (req, res) => {
         const saltRounds = 10;
         const hashedPassword = await bcrypt.hash(password, saltRounds);
 
-        // Insert user into database
         await db.execute("INSERT INTO users (username, password) VALUES (?, ?)", [username, hashedPassword]);
-
-        // Initialize company settings and subscription
         await db.execute("INSERT INTO company_settings (company_id) VALUES (?)", [username]);
         await db.execute("INSERT INTO subscriptions (company_id, plan) VALUES (?, 'freemium')", [username]);
 
         res.status(201).json({ message: "User created successfully!" });
-
     } catch (error) {
         if (error.code === "ER_DUP_ENTRY") {
             return res.status(400).json({ message: "Username already exists" });
@@ -157,13 +122,6 @@ app.post("/signup", async (req, res) => {
     }
 });
 
-server.listen(PORT, "0.0.0.0", () => {
-    console.log(`🚀 Server running on https://custommadebot-fresh.onrender.com`);
-});
-
-
-
-// Login Endpoint
 app.post("/login", async (req, res) => {
     const { username, password } = req.body;
 
@@ -172,8 +130,7 @@ app.post("/login", async (req, res) => {
     }
 
     try {
-        const query = "SELECT * FROM users WHERE username = ?";
-        const [results] = await db.execute(query, [username]);
+        const [results] = await db.execute("SELECT * FROM users WHERE username = ?", [username]);
 
         if (results.length === 0) {
             return res.status(401).json({ message: "Invalid username or password" });
@@ -617,19 +574,27 @@ async function isContactInfoMissing(user_id) {
 
 async function getUserState(user_id) {
     try {
-        const stateData = await redisclient.get(`user_state:${user_id}`);
-        return stateData ? JSON.parse(stateData) : { state: "initial", data: {} };
+        const [rows] = await db.execute(
+            "SELECT state_data FROM user_states WHERE user_id = ?",
+            [user_id]
+        );
+        return rows.length > 0 ? JSON.parse(rows[0].state_data) : { state: "initial", data: {} };
     } catch (err) {
-        console.error("Error getting user state from Redis:", err);
+        console.error("Error getting user state from MySQL:", err);
         return { state: "initial", data: {} };
     }
 }
 
 async function setUserState(user_id, stateData) {
     try {
-        await redisclient.set(`user_state:${user_id}`, JSON.stringify(stateData), "EX", 24 * 60 * 60);
+        const query = `
+            INSERT INTO user_states (user_id, state_data, updated_at)
+            VALUES (?, ?, NOW())
+            ON DUPLICATE KEY UPDATE state_data = ?, updated_at = NOW()
+        `;
+        await db.execute(query, [user_id, JSON.stringify(stateData), JSON.stringify(stateData)]);
     } catch (err) {
-        console.error("Error setting user state in Redis:", err);
+        console.error("Error setting user state in MySQL:", err);
     }
 }
 
@@ -689,10 +654,13 @@ async function handleNormalConversation(user_id, question, userStateData) {
     try {
         console.log(`Handling normal conversation for user ${user_id}, question: ${question}`);
         const normalizedQuestion = question.trim().toLowerCase();
-        const cachedResponse = await redisclient.get(`question:${normalizedQuestion}`);
-        if (cachedResponse) {
+        const [cachedRows] = await db.execute(
+            "SELECT response FROM cached_responses WHERE question_key = ? AND expires_at > NOW()",
+            [normalizedQuestion]
+        );
+        if (cachedRows.length > 0) {
             console.log("Returning cached response");
-            return { answer: formatResponse(cachedResponse) };
+            return { answer: formatResponse(cachedRows[0].response) };
         }
 
         let questions = JSON.parse(await readFile(questionsFile, "utf-8"));
@@ -715,7 +683,10 @@ async function handleNormalConversation(user_id, question, userStateData) {
 
         const finalAnswer = fixCommonTypos(rawAnswer);
         const formattedAnswer = formatResponse(finalAnswer);
-        await redisclient.set(`question:${normalizedQuestion}`, formattedAnswer, "EX", 3600);
+        await db.execute(
+            "INSERT INTO cached_responses (question_key, response, expires_at) VALUES (?, ?, DATE_ADD(NOW(), INTERVAL 1 HOUR)) ON DUPLICATE KEY UPDATE response = ?, expires_at = DATE_ADD(NOW(), INTERVAL 1 HOUR)",
+            [normalizedQuestion, formattedAnswer, formattedAnswer]
+        );
         await saveChatToDB(user_id, question, formattedAnswer);
         return { answer: formattedAnswer };
     } catch (err) {
@@ -794,7 +765,6 @@ app.post("/scrape", async (req, res) => {
 });
 
 // Dashboard Endpoints
-// Get company settings
 app.get("/api/settings", authenticateJWT, async (req, res) => {
     try {
         const companyId = req.user.username;
@@ -812,7 +782,6 @@ app.get("/api/settings", authenticateJWT, async (req, res) => {
     }
 });
 
-// Update company settings
 app.post("/api/settings", authenticateJWT, async (req, res) => {
     const { logo_url, primary_color, welcome_message, features, language } = req.body;
     const companyId = req.user.username;
@@ -831,7 +800,6 @@ app.post("/api/settings", authenticateJWT, async (req, res) => {
     }
 });
 
-// Get knowledge base
 app.get("/api/knowledge-base", authenticateJWT, async (req, res) => {
     try {
         const [rows] = await db.execute("SELECT * FROM knowledge_base");
@@ -842,7 +810,6 @@ app.get("/api/knowledge-base", authenticateJWT, async (req, res) => {
     }
 });
 
-// Add to knowledge base
 app.post("/api/knowledge-base", authenticateJWT, async (req, res) => {
     const { source, content } = req.body;
     if (!source || !content) {
@@ -861,7 +828,6 @@ app.post("/api/knowledge-base", authenticateJWT, async (req, res) => {
     }
 });
 
-// Delete from knowledge base
 app.delete("/api/knowledge-base/:id", authenticateJWT, async (req, res) => {
     const { id } = req.params;
     try {
@@ -879,7 +845,6 @@ app.delete("/api/knowledge-base/:id", authenticateJWT, async (req, res) => {
     }
 });
 
-// Get analytics (basic)
 app.get("/api/analytics", authenticateJWT, async (req, res) => {
     const companyId = req.user.username;
 
@@ -910,8 +875,6 @@ app.get("/api/analytics", authenticateJWT, async (req, res) => {
     }
 });
 
-// Subscription Endpoints
-// Get subscription status
 app.get("/api/subscription", authenticateJWT, async (req, res) => {
     try {
         const companyId = req.user.username;
@@ -929,7 +892,6 @@ app.get("/api/subscription", authenticateJWT, async (req, res) => {
     }
 });
 
-// Create Stripe checkout session
 app.post("/api/create-checkout-session", authenticateJWT, async (req, res) => {
     const companyId = req.user.username;
 
@@ -979,7 +941,6 @@ app.post("/api/create-checkout-session", authenticateJWT, async (req, res) => {
     }
 });
 
-// Stripe webhook to handle subscription events
 app.post("/webhook", express.raw({ type: "application/json" }), async (req, res) => {
     const sig = req.headers["stripe-signature"];
     let event;
@@ -1012,7 +973,6 @@ app.post("/webhook", express.raw({ type: "application/json" }), async (req, res)
     res.json({ received: true });
 });
 
-// Get company settings for chatbot
 app.get("/api/company-settings/:companyId", async (req, res) => {
     const { companyId } = req.params;
     try {
@@ -1030,7 +990,6 @@ app.get("/api/company-settings/:companyId", async (req, res) => {
     }
 });
 
-// Updated /ask Endpoint with Feature Toggling and Subscription Restrictions
 app.post("/ask", geminiRateLimiter, async (req, res) => {
     console.log("Received /ask request:", req.body);
     const { user_id, question } = req.body;
@@ -1047,7 +1006,6 @@ app.post("/ask", geminiRateLimiter, async (req, res) => {
         let userStateData = await getUserState(user_id);
         console.log(`User state: ${JSON.stringify(userStateData)}`);
 
-        // Fetch company settings and subscription
         const [settings] = await db.execute(
             "SELECT * FROM company_settings WHERE company_id = ?",
             [user_id]
@@ -1319,8 +1277,11 @@ app.post("/ask", geminiRateLimiter, async (req, res) => {
 });
 
 let scrapedContent = "";
-server.listen(PORT, async () => {
-    console.log(`Server running on https://custommadebot-fresh.onrender.com`);
+server.listen(PORT, "0.0.0.0", async () => {
+    const url = process.env.NODE_ENV === "production" 
+        ? "https://custommadebot-fresh.onrender.com" 
+        : `http://localhost:${PORT}`;
+    console.log(`🚀 Server running on ${url}`);
     const scrapeResult = await scrapeWebsite(SCRAPE_URL);
     if (typeof scrapeResult === "string" && !scrapeResult.startsWith("Error")) {
         scrapedContent = scrapeResult;
@@ -1376,6 +1337,24 @@ server.listen(PORT, async () => {
             )
         `);
         console.log("user_contacts table created or already exists");
+
+        await db.execute(`
+            CREATE TABLE IF NOT EXISTS user_states (
+                user_id VARCHAR(255) PRIMARY KEY,
+                state_data JSON,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+            )
+        `);
+        console.log("user_states table created or already exists");
+
+        await db.execute(`
+            CREATE TABLE IF NOT EXISTS cached_responses (
+                question_key VARCHAR(255) PRIMARY KEY,
+                response TEXT,
+                expires_at DATETIME
+            )
+        `);
+        console.log("cached_responses table created or already exists");
     } catch (err) {
         console.error("Error creating tables:", err);
     }
