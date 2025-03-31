@@ -34,7 +34,7 @@ if (!process.env.GOOGLE_API_KEY || !process.env.STRIPE_SECRET_KEY) {
 
 // MySQL Database Connection
 const DB_CONFIG = {
-    host: "localhost",
+    host: "https://custommadebot-fresh.onrender.com",
     user: "root",
     password: "12345",
     database: "bot_database",
