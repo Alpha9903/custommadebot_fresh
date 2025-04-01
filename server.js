@@ -34,7 +34,7 @@ if (!process.env.GOOGLE_API_KEY || !process.env.STRIPE_SECRET_KEY) {
 
 // MySQL Database Connection
 const DB_CONFIG = {
-    host: "custommadebot-fresh.onrender.com",  // ✅ Render MySQL Host
+    host: "localhost",  // ✅ Render MySQL Host
     user: "root",
     password: "12345",
     database: "bot_database",
@@ -574,18 +574,19 @@ async function isContactInfoMissing(user_id) {
     }
 }
 
-async function getUserState(user_id) {
+const getUserState = async (user_id) => {
     try {
-        const [rows] = await db.execute(
-            "SELECT state_data FROM user_states WHERE user_id = ?",
-            [user_id]
-        );
-        return rows.length > 0 ? JSON.parse(rows[0].state_data) : { state: "initial", data: {} };
-    } catch (err) {
-        console.error("Error getting user state from MySQL:", err);
+        const [rows] = await db.execute("SELECT state_data FROM user_states WHERE user_id = ?", [user_id]);
+        if (rows.length > 0) {
+            const userState = rows[0].state_data;
+            return typeof userState === "string" ? JSON.parse(userState) : userState;
+        }
+        return { state: "initial", data: {} };
+    } catch (error) {
+        console.error("Error getting user state:", error);
         return { state: "initial", data: {} };
     }
-}
+};
 
 async function setUserState(user_id, stateData) {
     try {
@@ -595,8 +596,9 @@ async function setUserState(user_id, stateData) {
             ON DUPLICATE KEY UPDATE state_data = ?, updated_at = NOW()
         `;
         await db.execute(query, [user_id, JSON.stringify(stateData), JSON.stringify(stateData)]);
+        console.log(`State updated for user ${user_id}: ${JSON.stringify(stateData)}`);
     } catch (err) {
-        console.error("Error setting user state in MySQL:", err);
+        console.error("Error setting user state:", err);
     }
 }
 
@@ -1023,9 +1025,10 @@ app.post("/ask", geminiRateLimiter, async (req, res) => {
         const contactInfoMissing = await isContactInfoMissing(user_id);
 
         if (contactInfoMissing && userStateData.state === "initial") {
-            console.log("User in initial state, asking for name");
             userStateData = { state: "asking_name", data: {} };
             await setUserState(user_id, userStateData);
+            const updatedState = await getUserState(user_id);
+            console.log(`State after asking_name for ${user_id}: ${JSON.stringify(updatedState)}`);
             const greeting = getTimeBasedGreeting();
             return res.json({ answer: `${greeting}, ${user_id}! I am a representative of ${COMPANY_NAME}. What should I call you?` });
         }
